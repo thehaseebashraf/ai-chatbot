@@ -17,15 +17,21 @@ class VectorDBService:
         return cls._instance
 
     def __init__(self):
-        if not VectorDBService._is_initialized:
+        if not self._is_initialized:
             self.client = QdrantClient(
                 url="https://0226cf72-a7d5-4bf6-be5f-7f78f89f6733.europe-west3-0.gcp.cloud.qdrant.io:6333",
                 api_key="_2Pmz-cQGsZCcgw5EW8YAjH31vh5XHlvSSCp7mF6scPMOJSsLXNm3g",
             )
             self.collection_name = "qa_index"
             self.embedding_model = None
-            self.initialize_vector_db()
             VectorDBService._is_initialized = True
+
+    @classmethod
+    def initialize_singleton(cls):
+        """Initialize the singleton instance and vector DB"""
+        instance = cls()
+        instance.initialize_vector_db()
+        return instance
 
     @staticmethod
     def clean_text(text):
@@ -55,7 +61,7 @@ class VectorDBService:
         self.initialize_embedding_model()
 
         # Define the path to your PDF file in the project
-        pdf_path = os.path.join(settings.BASE_DIR, 'chatbot_api', 'data', 'your_document.pdf')
+        pdf_path = os.path.join(settings.BASE_DIR, 'chatbot_api', 'data', 'solution_inn_complete_terms_of_service.pdf')
         
         if not os.path.exists(pdf_path):
             print(f"Warning: PDF file not found at {pdf_path}")
