@@ -7,3 +7,8 @@ class ChatMessageAdmin(admin.ModelAdmin):
     list_filter = ('created_at', 'ticket_id')
     search_fields = ('user_message', 'bot_response', 'ticket_id')
     readonly_fields = ('created_at',)
+    
+    
+    
+    # checking changes to new branch
+    # new branch
