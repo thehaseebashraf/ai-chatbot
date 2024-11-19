@@ -1,11 +1,12 @@
 from .vector_db import VectorDBService
 import os
+import requests
 
 class ChatbotService:
     def __init__(self):
         self.vector_db = VectorDBService()
 
-    def prepare_prompts(self, question, name="User", conversation=""):
+    def prepare_prompts(self, question, conversation=""):
         # Search for relevant context
         search_results = self.vector_db.search(question, top_k=3)
         context = "\n".join([result.payload['content'] for result in search_results])
@@ -38,11 +39,10 @@ class ChatbotService:
         return system_prompt, user_prompt
 
     def make_api_call(self, system_prompt, user_prompt):
-        import requests
         OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
         
         if not OPENAI_API_KEY:
-            raise ValueError("OpenAI API key not found in environment variables")
+            raise ValueError("OpenAI API key not found")
         
         try:
             response = requests.post(

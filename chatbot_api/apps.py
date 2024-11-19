@@ -7,5 +7,5 @@ class ChatbotApiConfig(AppConfig):
 
     def ready(self):
         from .vector_db import VectorDBService
-        # Initialize the vector DB only once when Django starts
-        VectorDBService.initialize_singleton()
+        # Initialize VectorDBService without initializing the vector DB
+        VectorDBService()  # Just create the instance

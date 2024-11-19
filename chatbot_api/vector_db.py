@@ -3,7 +3,7 @@ import fitz
 import re
 from sentence_transformers import SentenceTransformer
 import torch
-from qdrant_client import QdrantClient
+from qdrant_client import QdrantClient, models
 from qdrant_client.models import VectorParams, Distance
 from django.conf import settings
 
@@ -26,12 +26,12 @@ class VectorDBService:
             self.embedding_model = None
             VectorDBService._is_initialized = True
 
-    @classmethod
-    def initialize_singleton(cls):
-        """Initialize the singleton instance and vector DB"""
-        instance = cls()
-        instance.initialize_vector_db()
-        return instance
+    # @classmethod
+    # def initialize_singleton(cls):
+    #     """Initialize the singleton instance and vector DB"""
+    #     instance = cls()
+    #     instance.initialize_vector_db()
+    #     return instance
 
     @staticmethod
     def clean_text(text):
@@ -46,6 +46,13 @@ class VectorDBService:
 
     def search(self, text: str, top_k: int):
         self.initialize_embedding_model()
+        
+        collections = self.client.get_collections()
+        collection_names = [c.name for c in collections.collections]
+        
+        if self.collection_name not in collection_names:
+            raise ValueError("No embeddings found. Please upload a document first.")
+        
         query_embedding = self.embedding_model.encode(text).tolist()
 
         search_result = self.client.search(
@@ -56,16 +63,32 @@ class VectorDBService:
         )
         return search_result
 
-    def initialize_vector_db(self):
+    def clear_existing_embeddings(self):
+        """Clear all existing embeddings from the collection"""
+        try:
+            self.client.delete(
+                collection_name=self.collection_name,
+                points_selector=models.FilterSelector(
+                    filter=models.Filter(
+                        must=[],  # Empty filter means delete all
+                    )
+                )
+            )
+        except Exception as e:
+            print(f"Error clearing embeddings: {str(e)}")
+
+    def initialize_vector_db(self, pdf_path):
         # Initialize embedding model
         self.initialize_embedding_model()
 
-        # Define the path to your PDF file in the project
-        pdf_path = os.path.join(settings.BASE_DIR, 'chatbot_api', 'data', 'solution_inn_complete_terms_of_service.pdf')
+        if pdf_path is None:
+            raise ValueError("PDF path is required")
         
         if not os.path.exists(pdf_path):
-            print(f"Warning: PDF file not found at {pdf_path}")
-            return
+            raise FileNotFoundError(f"PDF file not found at {pdf_path}")
+
+        # Clear existing embeddings before adding new ones
+        self.clear_existing_embeddings()
 
         # Read the PDF
         doc = fitz.open(pdf_path)
