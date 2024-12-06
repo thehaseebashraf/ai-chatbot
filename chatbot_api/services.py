@@ -6,15 +6,12 @@ class ChatbotService:
     def __init__(self):
         self.vector_db = VectorDBService()
 
-    def prepare_prompts(self, question, conversation=""):
-        # Search for relevant context
-        search_results = self.vector_db.search(question, top_k=3)
-        context = "\n".join([result.payload['content'] for result in search_results])
-        
-        if not context.strip():
-            context = "No context found"
-
-        system_prompt = f"""You are a friendly AI solutioninn customer support agent and will help to answer user queries with greetings and an ending signature. 
+    def format_conversation_history(self, messages):
+        """Format conversation history into OpenAI message format"""
+        formatted_messages = [
+            {
+                "role": "system",
+                "content": """You are a friendly AI solutioninn customer support agent and will help to answer user queries with greetings and an ending signature. 
                             Empathise with the user and maintain a supportive tone throughout the conversation. 
                             Look at the question and answer the query according only to the given context.
                             You will also be given the complete conversation history for the given complaint, look at that and respond to the latest customer query. 
@@ -27,18 +24,29 @@ class ChatbotService:
                             Avoid phrases like "I don't know" or "I'm unable to provide information." Instead, focus on what you can do or explain.
                             Keep your answers concise, short and to the point.
                             Don't ask the user to contact the bank in case of refunds or other charges, you are responsible for performing the refunds for the user.
-                            Don't ask the user to reach out to support@solutioninn.com or refer to external support or any other form of support, you're the solutioninn support.
-                            Context: {context}
-        """
+                            Don't ask the user to reach out to support@solutioninn.com or refer to external support or any other form of support, you're the solutioninn support."""
+            }
+        ]
 
-        user_prompt = f"""
-        Question: {question}
-        Conversation history: {conversation}
-        """
+        # Add context from vector DB if it's the first message
+        if messages.exists():
+            latest_message = messages.latest('created_at')
+            search_results = self.vector_db.search(latest_message.user_message, top_k=3)
+            context = "\n".join([result.payload['content'] for result in search_results])
+            
+            if context.strip():
+                formatted_messages[0]["content"] += f"\n\nContext: {context}"
 
-        return system_prompt, user_prompt
+        # Add conversation history
+        for message in messages:
+            formatted_messages.extend([
+                {"role": "user", "content": message.user_message},
+                {"role": "assistant", "content": message.bot_response}
+            ])
 
-    def make_api_call(self, system_prompt, user_prompt):
+        return formatted_messages
+
+    def make_api_call(self, messages):
         OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
         
         if not OPENAI_API_KEY:
@@ -53,10 +61,7 @@ class ChatbotService:
                 },
                 json={
                     "model": "gpt-4o-mini",
-                    "messages": [
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt}
-                    ],
+                    "messages": messages,
                     "temperature": 0.3
                 }
             )
@@ -67,14 +72,7 @@ class ChatbotService:
             if 'error' in response_json:
                 raise Exception(f"OpenAI API Error: {response_json['error']}")
             
-            # Get the raw response
-            response_content = response_json['choices'][0]['message']['content']
-            
-            # Clean up the response to remove the "User:" and "Assistant:" parts
-            if "Assistant:" in response_content:
-                response_content = response_content.split("Assistant:", 1)[1].strip()
-            
-            return response_content
-            
+            return response_json['choices'][0]['message']['content']
+        
         except requests.exceptions.RequestException as e:
             raise Exception(f"API call failed: {str(e)}")
